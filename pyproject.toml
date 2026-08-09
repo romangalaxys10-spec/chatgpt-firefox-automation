@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chatgpt-firefox-automation"
+version = "1.0.0"
+description = "Headless/Headful ChatGPT automation via Firefox session cookies and Playwright"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "RyzenCode", email = "roman@ryzencode.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "structlog>=24.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-asyncio>=0.21", "ruff>=0.1", "mypy>=1.0", "pre-commit>=3.6"]
+headful = ["xvfbwrapper>=0.2"]
+
+[project.urls]
+Homepage = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation"
+Repository = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation"
+Issues = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation/issues"
+
+[project.scripts]
+chatgpt-automation = "chatgpt_firefox_automation.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chatgpt_firefox_automation*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "UP", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_classes = ["Test*"]
+filterwarnings = ["ignore::pytest.PytestUnknownMarkWarning"]

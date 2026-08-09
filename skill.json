@@ -1,0 +1,83 @@
+{
+  "$schema": "https://browser-act.github.io/schemas/skill.json",
+  "name": "chatgpt-firefox-automation",
+  "version": "1.0.0",
+  "description": "Headless/Headful ChatGPT automation via Firefox session cookies and Playwright",
+  "author": "RyzenCode",
+  "license": "MIT",
+  "homepage": "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation",
+  "repository": "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation.git",
+  "capabilities": [
+    "browser_automation",
+    "cookie_extraction",
+    "session_management",
+    "chatgpt_interaction"
+  ],
+  "tools": [
+    {
+      "name": "extract_cookies",
+      "description": "Extract ChatGPT session cookies from Firefox profile",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "profile_path": {"type": "string", "description": "Firefox profile path (auto-detected if omitted)"}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "cookies": {"type": "array", "items": {"type": "object"}},
+          "count": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "name": "send_prompt",
+      "description": "Send a prompt to ChatGPT and get the response",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {"type": "string", "description": "The prompt to send"},
+          "headless": {"type": "boolean", "default": true, "description": "Run in headless mode"},
+          "wait_for_response": {"type": "boolean", "default": true, "description": "Wait for full response"}
+        },
+        "required": ["prompt"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "response": {"type": "string"},
+          "success": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "start_session",
+      "description": "Start a new ChatGPT session",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "headless": {"type": "boolean", "default": true}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "session_id": {"type": "string"},
+          "page": {"type": "object"}
+        }
+      }
+    }
+  ],
+  "requirements": {
+    "python": ">=3.10",
+    "playwright": ">=1.40",
+    "chrome": "system-installed"
+  },
+  "config": {
+    "firefox_profile_path": "auto",
+    "chrome_executable": "/usr/bin/google-chrome-stable",
+    "headless": true,
+    "timeout": 30000
+  }
+}

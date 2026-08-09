@@ -1,79 +1,149 @@
-# ChatGPT Firefox Automation Skill
+# ChatGPT Firefox Automation
 
-## Overview
-This skill automates ChatGPT interaction via Firefox (chatgpt.com / auth.openai.com).
-It extracts live Firefox session cookies, injects them into Playwright (using the installed Chrome browser), and enables headless/headful chat with ChatGPT.
+🚀 **Headless/Headful ChatGPT automation** powered by your own Firefox session — no API keys, no tokens, no account sharing. Just your logged-in ChatGPT, automated.
 
-## Key Concepts
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-### Session Cookies
-ChatGPT uses these domains:
-- `.chatgpt.com` - the main ChatGPT app
-- `.auth.openai.com` - authentication and session management
-- `.openai.com` - OpenAI API endpoints
+---
 
-The skill extracts all cookies for these domains from the Firefox profile and injects them into Playwright's browser context via `context.add_cookies()`.
+## ✨ What it does
 
-### Modes
-- **Headless**: Runs without a visible browser. Used for automation and CI.
-- **Headful**: Shows the browser window. Used for manual testing and debugging.
-
-### Environment Variables
-| Variable | Purpose |
+| Capability | Description |
 |---|---|
-| `CHATGPT_HEADLESS` | Set to `false` to run in headful mode |
-| `CHATGPT_PROMPT` | Default prompt text sent when starting a new chat |
-| `CHATGPT_URL` | URL to navigate (default: `https://chatgpt.com`) |
+| 💬 **New chats** | Start fresh conversations on demand |
+| 🧠 **Long conversations** | Keep one session alive across many turns — brainstorm, offload tasks, chain context |
+| 📎 **File uploads** | Send JSON, text, or code files to ChatGPT and get analysis/review back |
+| 🕵️ **Headless or headful** | Run invisible for automation, or visible for debugging |
+| 🔐 **Zero keys needed** | Reuses your own Firefox login — cookies are extracted locally, never stored or sent |
+| ⚡ **Browser pool** | Pre-warmed contexts for low-latency, concurrent sessions |
+| 🔎 **History & sessions** | List conversations, inspect message history, resume any session |
 
-## Usage
+## 🛠 How it works
 
-### 1. Extract cookies (run once)
+1. **Extract** — reads your Firefox profile (`cookies.sqlite`), pulls the 30+ ChatGPT/OpenAI cookies, converts expiry from milliseconds to seconds.
+2. **Drive** — launches Playwright with your system Chrome, injects cookies, and navigates to chatgpt.com.
+3. **Chat** — types (real keystrokes) into the ProseMirror composer, submits via the send button, waits for the response to *finish streaming*, and returns the complete answer.
+4. **Maintain** — keeps the same page/session alive for follow-up turns, so ChatGPT remembers context.
+
+### Why it's robust
+- **CSP-safe**: never uses `page.evaluate`/`wait_for_function` (blocked by ChatGPT's Content-Security-Policy) — polls DOM with Playwright locators instead.
+- **Stream-aware**: waits for `button[data-testid="stop-button"]` to disappear, so you never read a partial answer and never send while the model is still busy.
+- **Anti-bot**: ships a real Chrome user-agent; default Playwright UA gets Cloudflare-blocked.
+
+## 📦 Installation
+
 ```bash
-python3 firefox_session.py
-```
-This prints all Firefox cookies for ChatGPT domains to stdout.
-
-### 2. Start a new chat
-```bash
-# In headful mode:
-CHATGPT_HEADLESS=false python3 chatgpt_automation.py
-
-# In headless mode (default):
-python3 chatgpt_automation.py
-
-# Or use env vars directly:
-CHATGPT_HEADLESS=false CHATGPT_PROMPT="Tell me a joke" python3 chatgpt_automation.py
+git clone https://github.com/romangalaxys10-spec/chatgpt-firefox-automation
+cd chatgpt-firefox-automation
+pip install -e .                # or: pip install -e .[dev]
 ```
 
-### 3. Get the response
-The response is saved to `{tempdir}/chatgpt_response.txt` for later use.
-
-## How It Works
-
-1. **Cookie Extraction**: Reads the Firefox profile's `cookies.sqlite` and filters for cookies on `chatgpt.com`, `auth.openai.com`, and `openai.com`. Converts Firefox's millisecond expiry timestamps to seconds for Playwright compatibility.
-2. **Browser Launch**: Opens a Playwright browser using the system's installed Chrome (`/usr/bin/google-chrome-stable`), headless by default or headful when `CHATGPT_HEADLESS=false`.
-3. **Cookie Injection**: Injects the extracted cookies into the browser context (using `await context.add_cookies()`).
-4. **Chat Flow**:
-   - Navigates to `chatgpt.com`
-   - Waits for the chat interface to load
-   - Fills the prompt into the contenteditable chat input div
-   - Presses Enter to send
-   - Waits for the assistant message to appear
-   - Extracts the response from the assistant message element
-   - Returns the response text
-
-## Requirements
+**Prerequisites**
 - Python 3.10+
-- `playwright` library (`pip install playwright`)
-- Playwright browsers installed (Chromium, Firefox, or Chrome) - uses system Chrome at `/usr/bin/google-chrome-stable`
-- Firefox profile accessible (snap install or system install)
-- The user must be logged into ChatGPT (via Firefox)
+- [Playwright](https://playwright.dev/docs/intro) + system **Google Chrome** (`/usr/bin/google-chrome-stable`)
+- Firefox with an active chatgpt.com login (snap install is auto-detected)
 
-## Notes
-- **This skill requires the user to be logged into ChatGPT** in Firefox.
-- It uses Firefox cookies (`cookies.sqlite`) - the session cookies are automatically invalidated when the Firefox session ends.
-- The skill works with the system's **snap-installed** Firefox (as typical in Ubuntu snap-based installations).
-- If you use a different Firefox profile, modify `get_firefox_profile_path()` in `firefox_session.py` to point to the correct profile directory.
+## 🚀 Quick start
 
-## License
-MIT
+```bash
+# Ask something (new chat)
+python -m chatgpt_firefox_automation "What is the capital of Japan?"
+
+# Continue the same conversation (memory preserved)
+python -m chatgpt_firefox_automation --session-id <id> "What did we just discuss?"
+
+# Upload a file and ask about it
+python -m chatgpt_firefox_automation --upload data/config.json "Review this config"
+
+# Visible browser (debugging)
+python -m chatgpt_firefox_automation --headful "Tell me a joke"
+
+# Just extract cookies
+python -m chatgpt_firefox_automation --cookie-extract
+```
+
+### As a Python library
+
+```python
+import asyncio
+from chatgpt_firefox_automation import ChatGPTSkill, SendPromptInput, UploadFileInput, ChatHistoryInput
+
+async def main():
+    skill = ChatGPTSkill(config={"headless": True})
+
+    # New chat
+    r1 = await skill.run(SendPromptInput(prompt="My name is Alice. Remember this."))
+    print(r1.data.response, r1.data.session_id)
+
+    # Continue the SAME chat - it remembers
+    r2 = await skill.run(SendPromptInput(prompt="What is my name?", session_id=r1.data.session_id))
+    print(r2.data.response)   # -> "Your name is Alice."
+
+    # Upload a code file
+    r3 = await skill.upload_file(UploadFileInput(
+        file_path="src/service.py",
+        prompt="Review this code for bugs",
+    ))
+    print(r3.response)
+
+    # Conversation history
+    hist = await skill.get_history(ChatHistoryInput(session_id=r1.data.session_id))
+    for msg in hist.messages:
+        print(msg["role"], msg["content"][:80])
+
+    await skill.shutdown()
+
+asyncio.run(main())
+```
+
+### Legacy one-liner
+
+The original single-file interface is preserved:
+
+```bash
+python3 chatgpt_automation.py                          # "Tell me a joke"
+CHATGPT_PROMPT="What is 2+2?" python3 chatgpt_automation.py
+CHATGPT_HEADLESS=false python3 chatgpt_automation.py   # headful
+```
+
+## 🏗 Architecture
+
+```
+chatgpt-firefox-automation/
+├── firefox_session.py / chatgpt_firefox_automation/firefox_session.py   # cookie extraction (ms→s expiry)
+├── chatgpt_firefox_automation/
+│   ├── text_skill.py        # TextSkill base + middleware pipeline (Logging/Timing/Errors)
+│   ├── skill_registry.py    # SkillRegistry, @register_skill decorator
+│   ├── middleware.py        # RateLimit, Retry middleware
+│   ├── session_manager.py   # session persistence, rotation
+│   ├── browser_pool.py      # concurrent context pool
+│   ├── chatgpt_client.py    # ChatGPTSkill: send / upload / history / sessions
+│   └── __main__.py          # CLI
+├── tests/                   # pytest suite (8 tests)
+├── skill.json               # browser-act compatible manifest
+├── Dockerfile               # containerised run
+└── .github/workflows/ci.yml # lint → test → build → publish
+```
+
+## 🧪 Tests
+
+```bash
+pip install -e .[dev]
+pytest tests/ -v
+```
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). PRs are welcome!
+
+## 🔒 Security
+
+- Cookies are read from your local Firefox profile only — never transmitted or stored except inside the ephemeral browser session.
+- No API keys. No telemetry. All traffic is direct to chatgpt.com.
+- See [SECURITY.md](SECURITY.md) for full details.
+
+## 📄 License
+
+MIT © RyzenCode

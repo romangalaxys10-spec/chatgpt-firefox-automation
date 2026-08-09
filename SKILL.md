@@ -1,79 +1,76 @@
 # ChatGPT Firefox Automation Skill
 
 ## Overview
-This skill automates ChatGPT interaction via Firefox (chatgpt.com / auth.openai.com).
-It extracts live Firefox session cookies, injects them into Playwright (using the installed Chrome browser), and enables headless/headful chat with ChatGPT.
+Headless/headful ChatGPT automation using the user's own Firefox login. Zero API keys — the skill extracts live Firefox session cookies, injects them into Playwright (system Chrome), and drives the real chatgpt.com UI.
 
-## Key Concepts
-
-### Session Cookies
-ChatGPT uses these domains:
-- `.chatgpt.com` - the main ChatGPT app
-- `.auth.openai.com` - authentication and session management
-- `.openai.com` - OpenAI API endpoints
-
-The skill extracts all cookies for these domains from the Firefox profile and injects them into Playwright's browser context via `context.add_cookies()`.
-
-### Modes
-- **Headless**: Runs without a visible browser. Used for automation and CI.
-- **Headful**: Shows the browser window. Used for manual testing and debugging.
-
-### Environment Variables
-| Variable | Purpose |
-|---|---|
-| `CHATGPT_HEADLESS` | Set to `false` to run in headful mode |
-| `CHATGPT_PROMPT` | Default prompt text sent when starting a new chat |
-| `CHATGPT_URL` | URL to navigate (default: `https://chatgpt.com`) |
+## Core Features
+1. **New chat sessions** — fresh conversations on demand (`SendPromptInput` without `session_id`).
+2. **Long-running conversations** — pass `session_id` across calls to continue the SAME chat; ChatGPT remembers context (brainstorming, task offload, multi-turn work).
+3. **File uploads** — attach JSON, text, or code files to the web chat and ask ChatGPT to review/analyze them (`UploadFileInput`).
+4. **Session management** — list sessions, get message history, resume anywhere.
+5. **Browser pool** — pre-warmed contexts for concurrency.
+6. **Headless & headful** — `config={"headless": False}` shows the browser.
 
 ## Usage
 
-### 1. Extract cookies (run once)
+### New chat
 ```bash
-python3 firefox_session.py
+python -m chatgpt_firefox_automation "Explain quantum computing"
 ```
-This prints all Firefox cookies for ChatGPT domains to stdout.
-
-### 2. Start a new chat
-```bash
-# In headful mode:
-CHATGPT_HEADLESS=false python3 chatgpt_automation.py
-
-# In headless mode (default):
-python3 chatgpt_automation.py
-
-# Or use env vars directly:
-CHATGPT_HEADLESS=false CHATGPT_PROMPT="Tell me a joke" python3 chatgpt_automation.py
+```python
+result = await skill.run(SendPromptInput(prompt="Explain quantum computing"))
+response, session_id = result.data.response, result.data.session_id
 ```
 
-### 3. Get the response
-The response is saved to `{tempdir}/chatgpt_response.txt` for later use.
+### Long conversation (same session)
+```bash
+python -m chatgpt_firefox_automation --session-id <id> "And simplify that"
+```
+```python
+r1 = await skill.run(SendPromptInput(prompt="My name is Alice", session_id=sid))
+r2 = await skill.run(SendPromptInput(prompt="What is my name?", session_id=sid))
+# r2 => "Your name is Alice."
+```
 
-## How It Works
+### File upload
+```bash
+python -m chatgpt_firefox_automation --upload ./code.py "Review this code"
+```
+```python
+r = await skill.upload_file(UploadFileInput(file_path="data.json", prompt="Summarize this data"))
+```
 
-1. **Cookie Extraction**: Reads the Firefox profile's `cookies.sqlite` and filters for cookies on `chatgpt.com`, `auth.openai.com`, and `openai.com`. Converts Firefox's millisecond expiry timestamps to seconds for Playwright compatibility.
-2. **Browser Launch**: Opens a Playwright browser using the system's installed Chrome (`/usr/bin/google-chrome-stable`), headless by default or headful when `CHATGPT_HEADLESS=false`.
-3. **Cookie Injection**: Injects the extracted cookies into the browser context (using `await context.add_cookies()`).
-4. **Chat Flow**:
-   - Navigates to `chatgpt.com`
-   - Waits for the chat interface to load
-   - Fills the prompt into the contenteditable chat input div
-   - Presses Enter to send
-   - Waits for the assistant message to appear
-   - Extracts the response from the assistant message element
-   - Returns the response text
+### History
+```python
+hist = await skill.get_history(ChatHistoryInput(session_id=sid))
+```
 
-## Requirements
-- Python 3.10+
-- `playwright` library (`pip install playwright`)
-- Playwright browsers installed (Chromium, Firefox, or Chrome) - uses system Chrome at `/usr/bin/google-chrome-stable`
-- Firefox profile accessible (snap install or system install)
-- The user must be logged into ChatGPT (via Firefox)
+## Critical Implementation Details (do not "fix" casually)
+- **CSP-safe DOM access**: chatgpt.com's Content-Security-Policy blocks `page.evaluate`/`wait_for_function` (unsafe-eval). Use `page.query_selector_all(...)` polling (`_wait_for_new_assistant_message`, `_wait_until_idle`).
+- **Busy-composer guard**: `button[data-testid="stop-button"]` means the model is still generating. Sending while busy silently fails — always `_wait_until_idle()` before typing.
+- **Real keystrokes**: `keyboard.type` (not `page.fill`) so ProseMirror registers the input after re-renders.
+- **Submit slot**: click `button[data-testid="send-button"]` or `button[class*="composer-submit"]`, never when aria-label says "Stop".
+- **User-agent**: must be a real Chrome UA (`BrowserPool.DEFAULT_USER_AGENT`) or Cloudflare blocks the page (contenteditable never mounts).
+- **Cookie expiry**: Firefox's `cookies.sqlite` stores ms timestamps; Playwright needs seconds (`/1000` in `firefox_session.py`).
+- **Load strategy**: `domcontentloaded` (not `networkidle` — ChatGPT keeps sockets alive forever).
 
-## Notes
-- **This skill requires the user to be logged into ChatGPT** in Firefox.
-- It uses Firefox cookies (`cookies.sqlite`) - the session cookies are automatically invalidated when the Firefox session ends.
-- The skill works with the system's **snap-installed** Firefox (as typical in Ubuntu snap-based installations).
-- If you use a different Firefox profile, modify `get_firefox_profile_path()` in `firefox_session.py` to point to the correct profile directory.
+## Session cookies used
+- `__Secure-next-auth.session-token.0/.1` @ chatgpt.com (login)
+- `__Secure-oai-is`, `oai-did`, `g_state`, `oai-sc`, `oai-hlib` @ chatgpt.com
+- `oai-client-auth-session/-info`, `unified_session_manifest` @ auth.openai.com
+- `__cf_bm`, `__cflb` (Cloudflare) + misc
 
-## License
-MIT
+## Environment
+- Python 3.10+, Playwright, system Chrome at `/usr/bin/google-chrome-stable`
+- Firefox profile auto-detected (snap: `~/snap/firefox/common/.mozilla/firefox/*.default*/cookies.sqlite`)
+- User must be logged into chatgpt.com in Firefox
+
+## Files
+- `chatgpt_firefox_automation/chatgpt_client.py` — ChatGPTSkill (main entry)
+- `chatgpt_firefox_automation/browser_pool.py` — concurrent contexts
+- `chatgpt_firefox_automation/text_skill.py` — TextSkill + middleware (NVIDIA labs-OO-Agents style)
+- `chatgpt_firefox_automation/skill_registry.py` — SkillRegistry
+- `chatgpt_firefox_automation/session_manager.py` — persistence/rotation
+- `chatgpt_firefox_automation/firefox_session.py` — cookie extraction
+- `chatgpt_firefox_automation/__main__.py` — CLI
+- `tests/` — pytest suite
