@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Actions CI/CD pipeline (lint, test, build, PyPI publish)
 
+## [1.1.0] - 2026-08-10
+
+### Added
+- **Qwen (chat.qwen.ai) provider** — same interface as ChatGPT: new chats, long-running same-session conversations with memory, history
+- `create_provider("chatgpt" | "qwen")` factory + `PROVIDERS` registry
+- CLI `--provider {chatgpt,qwen}` flag
+- Multi-provider cookie extraction (`extract_provider_cookies`, `extract_qwen_cookies`)
+- 4 new unit tests (12 total)
+
+### Key engineering (verified live against chat.qwen.ai)
+- Qwen keeps its session token in **localStorage**; the `token` cookie is httpOnly, so cookie-only injection leaves the page logged out
+- Fix: launch Playwright **Firefox** with `launch_persistent_context` on a **copy of the live Firefox profile** (cookies + storage + webappsstore + prefs) — carries cookies AND localStorage
+- Reuse Node Playwright's Firefox binary (`~/.cache/ms-playwright/firefox-*/`) because Python Playwright can't install browsers on Ubuntu 26.04
+- **SPA settle wait** (~6s) before typing — early typing silently vanishes
+- **Count-before ordering** — read assistant message count before submitting, else fast responses race the wait
+- Response selectors: `.qwen-chat-message-assistant` / `.chat-response-message`
+
 ## [1.0.0] - 2026-08-09
 
 ### Added

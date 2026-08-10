@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-ChatGPT Firefox Automation - CLI Entry Point
+ChatGPT / Qwen Firefox Automation - CLI Entry Point
 
 Usage:
     python -m chatgpt_firefox_automation [OPTIONS] PROMPT
 
 Options:
+    --provider NAME           chatgpt | qwen (default: chatgpt)
     --headless / --headful    Run in headless/headful mode (default: headless)
     --session-id ID           Continue existing session
     --system-prompt TEXT      Set system prompt for new sessions
@@ -25,33 +26,53 @@ from chatgpt_firefox_automation import (
     ChatHistoryInput,
     UploadFileInput,
     extract_chatgpt_cookies,
+    QwenSkill,
+    QwenPromptInput,
+    QwenHistoryInput,
+    extract_qwen_cookies,
 )
 
 
+def build_skill(args):
+    """Build a provider skill from CLI args (chatgpt | qwen)."""
+    provider = getattr(args, "provider", "chatgpt") or "chatgpt"
+    if provider == "chatgpt":
+        return ChatGPTSkill(config={"headless": args.headless})
+    if provider == "qwen":
+        return QwenSkill(config={"headless": args.headless})
+    raise ValueError(f"Unknown provider: {provider}")
+
+
 async def main():
-    parser = argparse.ArgumentParser(description="ChatGPT Firefox Automation")
-    parser.add_argument("prompt", nargs="?", help="Prompt to send to ChatGPT")
+    parser = argparse.ArgumentParser(description="ChatGPT / Qwen Firefox Automation")
+    parser.add_argument("prompt", nargs="?", help="Prompt to send to the provider")
+    parser.add_argument("--provider", default="chatgpt", choices=["chatgpt", "qwen"],
+                        help="Provider to use (default: chatgpt)")
     parser.add_argument("--headless", action="store_true", default=True, help="Run headless (default)")
     parser.add_argument("--headful", action="store_false", dest="headless", help="Run headful (visible browser)")
     parser.add_argument("--session-id", help="Continue existing session")
     parser.add_argument("--system-prompt", help="System prompt for new sessions")
-    parser.add_argument("--upload", help="Upload a file (JSON/text/code) with the prompt")
+    parser.add_argument("--upload", help="Upload a file (JSON/text/code) with the prompt (ChatGPT)")
     parser.add_argument("--history", action="store_true", help="Show conversation history")
     parser.add_argument("--list-sessions", action="store_true", help="List active sessions")
     parser.add_argument("--cookie-extract", action="store_true", help="Extract and print cookies only")
 
     args = parser.parse_args()
+    provider = args.provider
 
     # Handle cookie extraction
     if args.cookie_extract:
-        cookies = extract_chatgpt_cookies()
-        print(f"Extracted {len(cookies)} cookies:")
+        if provider == "qwen":
+            cookies = extract_qwen_cookies()
+        else:
+            cookies = extract_chatgpt_cookies()
+        print(f"Extracted {len(cookies)} cookies ({provider}):")
         for c in cookies:
             print(f"  {c['name']} @ {c['domain']}")
         return 0
 
     # Initialize skill
-    skill = ChatGPTSkill(config={"headless": args.headless})
+    skill = build_skill(args)
 
     try:
         if args.list_sessions:
@@ -67,14 +88,20 @@ async def main():
             if not args.session_id:
                 print("Error: --history requires --session-id")
                 return 1
-            result = await skill.run(ChatHistoryInput(session_id=args.session_id))
+            if provider == "qwen":
+                result = await skill.get_history(QwenHistoryInput(session_id=args.session_id))
+            else:
+                result = await skill.run(ChatHistoryInput(session_id=args.session_id))
             if result.success and result.data:
                 for msg in result.data.messages:
                     print(f"[{msg['role']}] {msg['content'][:100]}...")
             return 0
 
-        # File upload mode
+        # File upload mode (ChatGPT only for now)
         if args.upload:
+            if provider != "chatgpt":
+                print("Error: --upload is only supported for the chatgpt provider", file=sys.stderr)
+                return 1
             upload_path = Path(args.upload)
             if not upload_path.exists():
                 print(f"Error: file not found: {upload_path}", file=sys.stderr)
@@ -100,12 +127,20 @@ async def main():
             return 1
 
         # Send prompt (new chat or continue session)
-        result = await skill.run(SendPromptInput(
-            prompt=args.prompt,
-            session_id=args.session_id,
-            headless=args.headless,
-            system_prompt=args.system_prompt,
-        ))
+        if provider == "qwen":
+            result = await skill.execute(QwenPromptInput(
+                prompt=args.prompt,
+                session_id=args.session_id,
+                headless=args.headless,
+                system_prompt=args.system_prompt,
+            ))
+        else:
+            result = await skill.run(SendPromptInput(
+                prompt=args.prompt,
+                session_id=args.session_id,
+                headless=args.headless,
+                system_prompt=args.system_prompt,
+            ))
 
         if result.success:
             print(f"\nSession: {result.data.session_id} ({'new' if result.data.is_new_session else 'existing'})")

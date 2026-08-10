@@ -1,14 +1,34 @@
 """
-Firefox Session Extractor for ChatGPT (chatgpt.com / auth.openai.com)
+Firefox Session Extractor (multi-provider)
+
 Copies the user's live Firefox profile cookies into a temp SQLite DB,
-then reads the auth cookies needed for ChatGPT and formats them for Playwright.
+then reads the auth cookies needed for the requested provider(s) and
+formats them for Playwright.
+
+Supported providers:
+- chatgpt: chatgpt.com / auth.openai.com / openai.com
+- qwen:    chat.qwen.ai / qwen.ai / qwencloud.com / alibabacloud.com / alibaba.com
 """
 import os
 import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Sequence
+
+# Provider -> SQL LIKE patterns (host) + label used in logs
+PROVIDER_PATTERNS: Dict[str, Dict] = {
+    "chatgpt": {
+        "patterns": ["%chatgpt%", "%openai%"],
+        "label": "ChatGPT",
+        "site": "chatgpt.com",
+    },
+    "qwen": {
+        "patterns": ["%qwen%", "%tongyi%", "%alibabacloud%", "%alibaba.com%", "%qwencloud%", "%passport.alibabacloud%"],
+        "label": "Qwen",
+        "site": "chat.qwen.ai",
+    },
+}
 
 
 def get_firefox_profile_path() -> Path:
@@ -40,16 +60,13 @@ def get_firefox_profile_path() -> Path:
     raise FileNotFoundError("No cookies.sqlite found in any Firefox profile")
 
 
-def extract_chatgpt_cookies() -> List[Dict]:
-    """
-    Extract ChatGPT session cookies from Firefox profile.
-    Returns list of cookie dicts compatible with Playwright's context.add_cookies().
-    """
+def _read_cookies_for_patterns(patterns: Sequence[str]) -> List[Dict]:
+    """Read + convert cookies matching any host pattern from the Firefox profile."""
     profile_db = get_firefox_profile_path()
 
     # Copy to temp location to avoid "database is locked" (Firefox holds a write lock)
     tmp_dir = Path(tempfile.gettempdir())
-    tmp_db = tmp_dir / f"ff_chatgpt_cookies_{os.getpid()}.sqlite"
+    tmp_db = tmp_dir / f"ff_cookies_{os.getpid()}.sqlite"
     shutil.copy2(profile_db, tmp_db)
 
     try:
@@ -57,17 +74,17 @@ def extract_chatgpt_cookies() -> List[Dict]:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # ChatGPT uses these domains:
-        # - .chatgpt.com (main app)
-        # - .auth.openai.com (auth flow)
-        # - chatgpt.com, auth.openai.com (subdomains)
-        cursor.execute("""
+        # Build the WHERE clause: host LIKE p1 OR host LIKE p2 ...
+        where = " OR ".join("host LIKE ?" for _ in patterns)
+        cursor.execute(
+            f"""
             SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite
             FROM moz_cookies
-            WHERE host LIKE '%chatgpt%' 
-               OR host LIKE '%openai%'
+            WHERE {where}
             ORDER BY host
-        """)
+            """,
+            list(patterns),
+        )
         rows = cursor.fetchall()
         conn.close()
 
@@ -99,11 +116,7 @@ def extract_chatgpt_cookies() -> List[Dict]:
 
             cookies.append(cookie)
 
-        print(f"[ChatGPT Firefox] Extracted {len(cookies)} cookies from Firefox profile")
-        for c in cookies:
-            print(f"  - {c['name']} @ {c['domain']}")
         return cookies
-
     finally:
         # Cleanup temp copy
         try:
@@ -112,6 +125,35 @@ def extract_chatgpt_cookies() -> List[Dict]:
             pass
 
 
+def extract_provider_cookies(provider: str, verbose: bool = True) -> List[Dict]:
+    """Extract cookies for a named provider (chatgpt | qwen)."""
+    if provider not in PROVIDER_PATTERNS:
+        raise ValueError(f"Unknown provider '{provider}'. Known: {list(PROVIDER_PATTERNS)}")
+
+    cfg = PROVIDER_PATTERNS[provider]
+    cookies = _read_cookies_for_patterns(cfg["patterns"])
+
+    if verbose:
+        print(f"[{cfg['label']} Firefox] Extracted {len(cookies)} cookies from Firefox profile")
+        for c in cookies:
+            print(f"  - {c['name']} @ {c['domain']}")
+
+    return cookies
+
+
+def extract_chatgpt_cookies(verbose: bool = True) -> List[Dict]:
+    """Backwards-compatible: extract ChatGPT session cookies from Firefox profile."""
+    return extract_provider_cookies("chatgpt", verbose=verbose)
+
+
+def extract_qwen_cookies(verbose: bool = True) -> List[Dict]:
+    """Extract Qwen (chat.qwen.ai) session cookies from Firefox profile."""
+    return extract_provider_cookies("qwen", verbose=verbose)
+
+
 if __name__ == "__main__":
-    cookies = extract_chatgpt_cookies()
+    import sys
+
+    provider = sys.argv[1] if len(sys.argv) > 1 else "chatgpt"
+    cookies = extract_provider_cookies(provider)
     print(f"\nTotal: {len(cookies)} cookies ready for Playwright injection")
