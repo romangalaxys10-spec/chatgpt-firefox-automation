@@ -1,5 +1,9 @@
 # ChatGPT Firefox Automation
 
+> **v1.1.1** — fixes a Qwen composer-selector collision (bare `textarea` matched
+> the readonly Monaco editor ahead of the real chat composer on artifact
+> conversations). See [CHANGELOG.md](./CHANGELOG.md).
+
 🚀 **Headless/Headful ChatGPT & Qwen automation** powered by your own Firefox session — no API keys, no tokens, no account sharing. Just your logged-in accounts, automated.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)

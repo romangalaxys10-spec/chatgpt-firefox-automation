@@ -105,12 +105,34 @@ class QwenSession:
         except Exception:
             pass
 
-        # Type into the composer (real keystrokes)
-        input_sel = 'textarea.message-input-textarea, textarea, div[contenteditable="true"]'
+        # Type into the composer (real keystrokes).
+        # IMPORTANT: must target the chat composer specifically. The page may also
+        # contain a Monaco code-editor textarea (aria-label="Editor content",
+        # class "inputarea monaco-mouse-cursor-text") from artifact / vibe-coding
+        # conversations, which is readonly and would match a bare `textarea`
+        # selector FIRST, causing the prompt to be typed into the wrong element
+        # and the send button to never fire. Prefer the specific composer class,
+        # then fall back to non-readonly textareas inside input containers, then
+        # contenteditable.
+        primary_sel = 'textarea.message-input-textarea'
+        fallback_sels = [
+            'div[class*="input"] textarea:not([readonly])',
+            'div[contenteditable="true"]',
+        ]
         try:
-            await self.page.wait_for_selector(input_sel, timeout=15000)
+            await self.page.wait_for_selector(primary_sel, timeout=15000)
+            input_sel = primary_sel
         except Exception:
-            raise RuntimeError("Qwen composer not found - check login state")
+            input_sel = None
+            for alt in fallback_sels:
+                try:
+                    if await self.page.locator(alt).count() > 0:
+                        input_sel = alt
+                        break
+                except Exception:
+                    continue
+            if input_sel is None:
+                raise RuntimeError("Qwen composer not found - check login state")
 
         # Let the SPA fully hydrate before typing (React attaches handlers lazily -
         # typing too early silently vanishes and the send button never fires)
@@ -254,10 +276,26 @@ class QwenSkill(TextSkill[QwenPromptInput, QwenPromptOutput]):
         page = self._context.pages[0] if self._context.pages else await self._context.new_page()
         await page.goto("https://chat.qwen.ai", wait_until="domcontentloaded", timeout=45000)
         try:
-            await page.wait_for_selector(
-                'textarea.message-input-textarea, textarea, div[contenteditable="true"]',
-                timeout=20000,
-            )
+            # Same defensive selector logic as send(): prefer the specific
+            # composer, fall back through non-readonly textareas / contenteditable.
+            # A bare `textarea` matches the readonly Monaco editor first.
+            try:
+                await page.wait_for_selector(
+                    'textarea.message-input-textarea',
+                    timeout=20000,
+                )
+            except Exception:
+                for alt in (
+                    'div[class*="input"] textarea:not([readonly])',
+                    'div[contenteditable="true"]',
+                ):
+                    try:
+                        if await page.locator(alt).count() > 0:
+                            break
+                    except Exception:
+                        continue
+                else:
+                    raise RuntimeError("no composer found")
         except Exception:
             logger.warning("qwen_composer_not_found")
         return self._context

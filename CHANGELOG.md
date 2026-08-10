@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Actions CI/CD pipeline (lint, test, build, PyPI publish)
 
+## [1.1.1] - 2026-08-10
+
+### Fixed
+- **Qwen composer selector collision** (`qwen_client.py`). The composer matcher
+  used a bare `'textarea.message-input-textarea, textarea, div[contenteditable="true"]'`
+  selector in two places (`send()` and `_ensure_context()`). On artifact / vibe-
+  coding conversations, chat.qwen.ai renders a **readonly Monaco code-editor
+  textarea** (aria-label `"Editor content"`, class `inputarea monaco-mouse-cursor-
+  text`) that matches the bare `textarea` clause FIRST — ahead of the real chat
+  composer. The prompt was then typed into the wrong (readonly) element and the
+  send button never fired, producing empty or stale responses.
+
+  Fix: prefer the specific `textarea.message-input-textarea` selector, then fall
+  back through a defensive ladder:
+  1. `textarea.message-input-textarea`
+  2. `div[class*="input"] textarea:not([readonly])`
+  3. `div[contenteditable="true"]`
+
+  Raises a clear `RuntimeError("Qwen composer not found…")` only if all three
+  fail. Mirrors the parallel fix applied to the Node.js consumer
+  (`vibe-gpt-studio/qwen_service.js`).
+
 ## [1.1.0] - 2026-08-10
 
 ### Added
