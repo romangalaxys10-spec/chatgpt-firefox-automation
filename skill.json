@@ -1,8 +1,8 @@
 {
   "$schema": "https://browser-act.github.io/schemas/skill.json",
   "name": "chatgpt-firefox-automation",
-  "version": "1.1.1",
-  "description": "Headless/Headful ChatGPT automation via Firefox session cookies and Playwright",
+  "version": "2.0.0",
+  "description": "Headless/Headful ChatGPT, Qwen & DeepSeek automation via Firefox session cookies and Playwright",
   "author": "RyzenCode",
   "license": "MIT",
   "homepage": "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation",
@@ -11,7 +11,9 @@
     "browser_automation",
     "cookie_extraction",
     "session_management",
-    "chatgpt_interaction"
+    "chatgpt_interaction",
+    "qwen_interaction",
+    "deepseek_interaction"
   ],
   "tools": [
     {

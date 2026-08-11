@@ -1,15 +1,16 @@
-# ChatGPT & Qwen Firefox Automation Skill
+# ChatGPT, Qwen & DeepSeek Firefox Automation Skill
 
 ## Overview
-Headless/headful automation for **ChatGPT** (chatgpt.com) and **Qwen** (chat.qwen.ai) using the user's own Firefox login. Zero API keys — the skill extracts live Firefox session state and drives the real web UIs with Playwright.
+Headless/headful automation for **ChatGPT** (chatgpt.com), **Qwen** (chat.qwen.ai) and **DeepSeek** (chat.deepseek.com) using the user's own Firefox login. Zero API keys — the skill extracts live Firefox session state and drives the real web UIs with Playwright.
 
 ## Core Features
-1. **New chat sessions** — fresh conversations on demand (`SendPromptInput` / `QwenPromptInput` without `session_id`).
+1. **New chat sessions** — fresh conversations on demand (`SendPromptInput` / `QwenPromptInput` / `DeepSeekPromptInput` without `session_id`).
 2. **Long-running conversations** — pass `session_id` across calls to continue the SAME chat; the model remembers context (brainstorming, task offload, multi-turn work).
 3. **File uploads** (ChatGPT) — attach JSON, text, or code files to the web chat (`UploadFileInput`).
-4. **Provider switch** — `create_provider("chatgpt" | "qwen")` or CLI `--provider`.
-5. **Session management** — list sessions, get message history, resume anywhere.
-6. **Headless & headful** — `config={"headless": False}` shows the browser.
+4. **DeepSeek 3 modes** — `instant` (V3), `expert` (R1/DeepThink), `vision` (image-capable) via `DeepSeekPromptInput(mode=...)` or CLI `--mode`.
+5. **Provider switch** — `create_provider("chatgpt" | "qwen" | "deepseek")` or CLI `--provider`.
+6. **Session management** — list sessions, get message history, resume anywhere.
+7. **Headless & headful** — `config={"headless": False}` shows the browser.
 
 ## Usage
 
@@ -29,6 +30,16 @@ python -m chatgpt_firefox_automation --provider qwen "Explain quantum computing"
 ```python
 result = await qwen.execute(QwenPromptInput(prompt="Explain quantum computing"))
 response, session_id = result.data.response, result.data.session_id
+```
+
+### DeepSeek — 3 modes (instant / expert / vision)
+```bash
+python -m chatgpt_firefox_automation --provider deepseek --mode expert "Prove Fermat's Last Theorem"
+```
+```python
+result = await deepseek.execute(DeepSeekPromptInput(prompt="Explain black holes", mode="expert"))
+response, session_id = result.data.response, result.data.session_id
+# modes: "instant" (default, V3) | "expert" (R1/DeepThink) | "vision"
 ```
 
 ### Long conversation (same session)
@@ -65,24 +76,33 @@ r = await skill.upload_file(UploadFileInput(file_path="data.json", prompt="Summa
 - **Count-before ordering**: read the assistant-message count BEFORE submitting (a fast response otherwise already includes the new message and the wait never fires).
 - **Response selectors**: user `.chat-user-message`, assistant `.qwen-chat-message-assistant` / `.chat-response-message`; poll last element's text until stable.
 
+### DeepSeek (chat.deepseek.com)
+- **PROFILE-COPY IS MANDATORY**: chat.deepseek.com 403s anonymous requests and uses **AWS WAF** (`aws-waf-token` cookie). Cookie-only injection can be rejected. Launch Playwright **Firefox** with `launch_persistent_context(user_data_dir=<copy of the live profile>)` to carry the WAF token + session (same trick as Qwen).
+- **3 modes** via `[data-model-type="..."]` radio toggles: `"default"` = instant (V3), `"expert"` = expert (R1/DeepThink), `"vision"` = vision. Map in `MODE_TO_MODEL_TYPE`.
+- **Composer**: `textarea[placeholder="Message DeepSeek"]`. Send via `button[aria-label*="send" i]` / `.ds-button--primary`, else Enter.
+- **Response**: poll the last `[class*="markdown"]` block until the stop button disappears and text stabilizes; error if nothing appears in 30s (logged out / WAF expired).
+- **Portable resolution**: `FIREFOX_BIN` / `FIREFOX_PROFILE` env vars override the default Firefox binary + live profile.
+
 ### Shared
 - **Cookie expiry**: Firefox's `cookies.sqlite` stores ms timestamps; Playwright needs seconds (`/1000` in `firefox_session.py`).
-- **Load strategy**: `domcontentloaded` (both sites keep sockets alive forever).
+- **Load strategy**: `domcontentloaded` (all sites keep sockets alive forever).
 
 ## Session cookies used
 - **ChatGPT**: `__Secure-next-auth.session-token.0/.1` @ chatgpt.com, `__Secure-oai-is`, `oai-did`, `g_state` @ chatgpt.com, `oai-client-auth-session/-info` @ auth.openai.com, `__cf_bm`, `__cflb` + misc.
 - **Qwen**: `token` @ qwen.ai (JWT; read from localStorage by the SPA), `acw_tc` @ chat.qwen.ai (anti-bot), `aui`/`cna`/`isg`/`tfstk` @ qwen.ai, `login_qwencloud_ticket` @ qwencloud.com + misc.
+- **DeepSeek**: `aws-waf-token` @ chat.deepseek.com (AWS WAF anti-bot) + session cookies.
 
 ## Environment
-- Python 3.10+, Playwright, system Chrome at `/usr/bin/google-chrome-stable` (ChatGPT), Playwright Firefox (Qwen)
+- Python 3.10+, Playwright, system Chrome at `/usr/bin/google-chrome-stable` (ChatGPT), Playwright Firefox (Qwen + DeepSeek)
 - Firefox profile auto-detected (snap: `~/snap/firefox/common/.mozilla/firefox/*.default*/cookies.sqlite`)
-- User must be logged into chatgpt.com and chat.qwen.ai in Firefox
+- User must be logged into chatgpt.com, chat.qwen.ai and chat.deepseek.com in Firefox
 
 ## Files
 - `chatgpt_firefox_automation/chatgpt_client.py` — ChatGPTSkill (ChatGPT main entry)
 - `chatgpt_firefox_automation/qwen_client.py` — QwenSkill (Qwen main entry, profile-copy)
+- `chatgpt_firefox_automation/deepseek_client.py` — DeepSeekSkill (DeepSeek main entry, 3 modes)
 - `chatgpt_firefox_automation/firefox_session.py` — multi-provider cookie extraction
 - `chatgpt_firefox_automation/browser_pool.py` — concurrent contexts (ChatGPT)
 - `chatgpt_firefox_automation/text_skill.py` — TextSkill + middleware (NVIDIA labs-OO-Agents style)
-- `chatgpt_firefox_automation/__main__.py` — CLI (--provider chatgpt|qwen)
-- `tests/` — pytest suite (12 tests)
+- `chatgpt_firefox_automation/__main__.py` — CLI (--provider chatgpt|qwen|deepseek)
+- `tests/` — pytest suite (20 tests)

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-ChatGPT / Qwen Firefox Automation - CLI Entry Point
+ChatGPT / Qwen / DeepSeek Firefox Automation - CLI Entry Point
 
 Usage:
     python -m chatgpt_firefox_automation [OPTIONS] PROMPT
 
 Options:
-    --provider NAME           chatgpt | qwen (default: chatgpt)
+    --provider NAME           chatgpt | qwen | deepseek (default: chatgpt)
+    --mode MODE               DeepSeek mode: instant | expert | vision (default: instant)
     --headless / --headful    Run in headless/headful mode (default: headless)
     --session-id ID           Continue existing session
     --system-prompt TEXT      Set system prompt for new sessions
@@ -30,24 +31,32 @@ from chatgpt_firefox_automation import (
     QwenPromptInput,
     QwenHistoryInput,
     extract_qwen_cookies,
+    DeepSeekSkill,
+    DeepSeekPromptInput,
+    DeepSeekHistoryInput,
+    extract_deepseek_cookies,
 )
 
 
 def build_skill(args):
-    """Build a provider skill from CLI args (chatgpt | qwen)."""
+    """Build a provider skill from CLI args (chatgpt | qwen | deepseek)."""
     provider = getattr(args, "provider", "chatgpt") or "chatgpt"
     if provider == "chatgpt":
         return ChatGPTSkill(config={"headless": args.headless})
     if provider == "qwen":
         return QwenSkill(config={"headless": args.headless})
+    if provider == "deepseek":
+        return DeepSeekSkill(config={"headless": args.headless})
     raise ValueError(f"Unknown provider: {provider}")
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="ChatGPT / Qwen Firefox Automation")
+    parser = argparse.ArgumentParser(description="ChatGPT / Qwen / DeepSeek Firefox Automation")
     parser.add_argument("prompt", nargs="?", help="Prompt to send to the provider")
-    parser.add_argument("--provider", default="chatgpt", choices=["chatgpt", "qwen"],
+    parser.add_argument("--provider", default="chatgpt", choices=["chatgpt", "qwen", "deepseek"],
                         help="Provider to use (default: chatgpt)")
+    parser.add_argument("--mode", default="instant", choices=["instant", "expert", "vision"],
+                        help="DeepSeek mode: instant (V3) | expert (R1) | vision (default: instant)")
     parser.add_argument("--headless", action="store_true", default=True, help="Run headless (default)")
     parser.add_argument("--headful", action="store_false", dest="headless", help="Run headful (visible browser)")
     parser.add_argument("--session-id", help="Continue existing session")
@@ -64,6 +73,8 @@ async def main():
     if args.cookie_extract:
         if provider == "qwen":
             cookies = extract_qwen_cookies()
+        elif provider == "deepseek":
+            cookies = extract_deepseek_cookies()
         else:
             cookies = extract_chatgpt_cookies()
         print(f"Extracted {len(cookies)} cookies ({provider}):")
@@ -90,6 +101,8 @@ async def main():
                 return 1
             if provider == "qwen":
                 result = await skill.get_history(QwenHistoryInput(session_id=args.session_id))
+            elif provider == "deepseek":
+                result = await skill.get_history(DeepSeekHistoryInput(session_id=args.session_id))
             else:
                 result = await skill.run(ChatHistoryInput(session_id=args.session_id))
             if result.success and result.data:
@@ -133,6 +146,13 @@ async def main():
                 session_id=args.session_id,
                 headless=args.headless,
                 system_prompt=args.system_prompt,
+            ))
+        elif provider == "deepseek":
+            result = await skill.execute(DeepSeekPromptInput(
+                prompt=args.prompt,
+                mode=args.mode,
+                session_id=args.session_id,
+                headless=args.headless,
             ))
         else:
             result = await skill.run(SendPromptInput(

@@ -8,6 +8,7 @@ formats them for Playwright.
 Supported providers:
 - chatgpt: chatgpt.com / auth.openai.com / openai.com
 - qwen:    chat.qwen.ai / qwen.ai / qwencloud.com / alibabacloud.com / alibaba.com
+- deepseek: chat.deepseek.com (incl. AWS WAF token)
 """
 import os
 import shutil
@@ -27,6 +28,11 @@ PROVIDER_PATTERNS: Dict[str, Dict] = {
         "patterns": ["%qwen%", "%tongyi%", "%alibabacloud%", "%alibaba.com%", "%qwencloud%", "%passport.alibabacloud%"],
         "label": "Qwen",
         "site": "chat.qwen.ai",
+    },
+    "deepseek": {
+        "patterns": ["%deepseek%"],
+        "label": "DeepSeek",
+        "site": "chat.deepseek.com",
     },
 }
 
@@ -149,6 +155,11 @@ def extract_chatgpt_cookies(verbose: bool = True) -> List[Dict]:
 def extract_qwen_cookies(verbose: bool = True) -> List[Dict]:
     """Extract Qwen (chat.qwen.ai) session cookies from Firefox profile."""
     return extract_provider_cookies("qwen", verbose=verbose)
+
+
+def extract_deepseek_cookies(verbose: bool = True) -> List[Dict]:
+    """Extract DeepSeek (chat.deepseek.com, incl. AWS WAF token) cookies from Firefox profile."""
+    return extract_provider_cookies("deepseek", verbose=verbose)
 
 
 if __name__ == "__main__":

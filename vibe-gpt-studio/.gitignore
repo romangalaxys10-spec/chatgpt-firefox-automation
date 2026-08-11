@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Build outputs
+# NOTE: client/dist/ is committed so the Electron fallback (loadFile) works
+# right after a clone without a rebuild. Rebuild with: npm run build:client
+/dist/
+*.tsbuildinfo
+
+# Runtime data (sessions, logs, temp profiles)
+sessions/
+*.db
+*.sqlite
+*.sqlite-journal
+/tmp/
+*.log
+
+# Env & secrets
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (automation submodule)
+__pycache__/
+*.pyc
+*.egg-info/
+*.backup

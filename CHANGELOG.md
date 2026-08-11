@@ -10,6 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Actions CI/CD pipeline (lint, test, build, PyPI publish)
 
+## [2.0.0] - 2026-08-11
+
+### Added
+- **DeepSeek provider** (`deepseek_client.py`) — full automation for chat.deepseek.com via profile-copy persistent context (AWS WAF token survives), with **3 response modes**:
+  - `instant` → DeepSeek V3 (model-type `default`, fast, non-reasoning)
+  - `expert` → DeepSeek R1 / DeepThink (model-type `expert`, shows reasoning)
+  - `vision` → model-type `vision` (image-upload capable)
+- `extract_deepseek_cookies()`, `deepseek` in `PROVIDER_PATTERNS` (chat.deepseek.com).
+- `--provider deepseek` and `--mode instant|expert|vision` in the CLI (`__main__.py`).
+- `DeepSeekSkill` registered in the skill registry + provider factory (`create_provider("deepseek")`).
+- `tests/test_deepseek.py` — mode mapping, registry, cookie extraction (20 total tests, all pass).
+- **Desktop Chat Studio** emerged as the `vibe-gpt-studio/` folder in this monorepo
+  (Electron + React app orchestrating ChatGPT, Qwen, DeepSeek and local Ollama
+  models, plus the `/brainstorm-*` skills for all three vendors).
+
+### Changed
+- Package version `1.1.1` → `2.0.0`; project description covers all three vendors.
+- `skill.json` version → `2.0.0`, added `qwen_interaction` + `deepseek_interaction` capabilities.
+- README/SKILL.md now document the 3-vendor usage and the monorepo layout.
+
+### Portable
+- `deepseek_client.py` resolves the Firefox binary and live profile via the
+  `FIREFOX_BIN` / `FIREFOX_PROFILE` environment variables (current defaults are
+  the fallback), so the controller is not tied to one machine.
+
 ## [1.1.1] - 2026-08-10
 
 ### Fixed

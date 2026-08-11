@@ -106,7 +106,7 @@ class SkillRegistry:
         """Export as browser-act skill manifest"""
         return {
             "name": "chatgpt-firefox-automation",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "skills": self.list_skills(),
         }
     
