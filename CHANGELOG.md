@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Package version `1.1.1` → `2.0.0`; project description covers all three vendors.
+- **Repository renamed** to `web-ai-firefox-automation` (from `chatgpt-firefox-automation`)
+  to reflect the multi-vendor + desktop-studio scope. The old GitHub URL still
+  redirects automatically. The Python **package/module** name
+  (`chatgpt_firefox_automation`, pip package `chatgpt-firefox-automation`) is
+  unchanged to avoid breaking imports/installs.
 - `skill.json` version → `2.0.0`, added `qwen_interaction` + `deepseek_interaction` capabilities.
 - README/SKILL.md now document the 3-vendor usage and the monorepo layout.
 

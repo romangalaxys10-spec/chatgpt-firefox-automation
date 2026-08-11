@@ -1,4 +1,4 @@
-# ChatGPT, Qwen & DeepSeek Firefox Automation + Desktop Chat Studio
+# Web AI Firefox Automation — ChatGPT, Qwen & DeepSeek + Desktop Chat Studio
 
 > **v2.0.0** — adds the **DeepSeek** provider (instant/expert/vision) and emerges
 > the **Desktop Chat Studio** app as the `vibe-gpt-studio/` folder inside this repo.
@@ -59,7 +59,7 @@ See [vibe-gpt-studio/README.md](./vibe-gpt-studio/README.md) for the full user g
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/romangalaxys10-spec/chatgpt-firefox-automation
+git clone https://github.com/romangalaxys10-spec/web-ai-firefox-automation
 cd chatgpt-firefox-automation
 pip install -e .                # or: pip install -e .[dev]
 ```

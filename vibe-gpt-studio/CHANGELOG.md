@@ -10,7 +10,7 @@ Format loosely based on [Keep a Changelog](https://keepachangelog.com/).
 ### 🏠 Relocated — now the `vibe-gpt-studio/` folder of the `chatgpt-firefox-automation` monorepo
 
 - The desktop studio app moved out of its own separate GitHub repo and now lives
-  at [`chatgpt-firefox-automation/vibe-gpt-studio/`](https://github.com/romangalaxys10-spec/chatgpt-firefox-automation).
+  at [`chatgpt-firefox-automation/vibe-gpt-studio/`](https://github.com/romangalaxys10-spec/web-ai-firefox-automation).
 - **DeepSeek** added as a third web provider (`deepseek_service.js`, modes:
   instant/expert/vision).
 - Client renderer build is committed to `client/dist/` so the Electron fallback

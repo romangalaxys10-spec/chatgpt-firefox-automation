@@ -22,9 +22,9 @@ dev = ["pytest>=7.4", "pytest-asyncio>=0.21", "ruff>=0.1", "mypy>=1.0", "pre-com
 headful = ["xvfbwrapper>=0.2"]
 
 [project.urls]
-Homepage = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation"
-Repository = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation"
-Issues = "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation/issues"
+Homepage = "https://github.com/romangalaxys10-spec/web-ai-firefox-automation"
+Repository = "https://github.com/romangalaxys10-spec/web-ai-firefox-automation"
+Issues = "https://github.com/romangalaxys10-spec/web-ai-firefox-automation/issues"
 
 [project.scripts]
 chatgpt-automation = "chatgpt_firefox_automation.__main__:main"

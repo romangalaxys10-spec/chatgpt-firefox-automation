@@ -5,8 +5,8 @@
   "description": "Headless/Headful ChatGPT, Qwen & DeepSeek automation via Firefox session cookies and Playwright",
   "author": "RyzenCode",
   "license": "MIT",
-  "homepage": "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation",
-  "repository": "https://github.com/romangalaxys10-spec/chatgpt-firefox-automation.git",
+  "homepage": "https://github.com/romangalaxys10-spec/web-ai-firefox-automation",
+  "repository": "https://github.com/romangalaxys10-spec/web-ai-firefox-automation.git",
   "capabilities": [
     "browser_automation",
     "cookie_extraction",
