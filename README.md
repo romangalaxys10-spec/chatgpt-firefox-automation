@@ -41,6 +41,215 @@ npm start                # start the API + Electron UI (port :3099)
 
 See [vibe-gpt-studio/README.md](./vibe-gpt-studio/README.md) for the full user guide.
 
+## 🤖 Integrating with Coding Harnesses (zcode, Claude, Cursor, etc.)
+
+This repo exposes a **local HTTP API** (`:3099`) that any coding harness — zcode, Claude, Cursor, Copilot, or a custom script — can call to offload tasks to ChatGPT, Qwen, or DeepSeek without API keys. The harness sends a prompt via JSON, the backend drives the real web UI through your logged-in Firefox session, waits for the full streaming response, and returns the complete answer over HTTP.
+
+### The `/api/ask` endpoint
+
+```
+POST http://localhost:3099/api/ask
+Content-Type: application/json
+```
+
+**Request body:**
+```json
+{
+  "provider": "chatgpt" | "qwen" | "deepseek",
+  "mode": "brainstorm" | "code" | "review" | "plan" | "debug",
+  "prompt": "Your question, instruction, or task here"
+}
+```
+
+**Response (success):**
+```json
+{
+  "ok": true,
+  "response": "The full answer from the AI vendor",
+  "sessionId": "ask_1786433639560",
+  "provider": "chatgpt",
+  "mode": "brainstorm"
+}
+```
+
+**Response (failure):**
+```json
+{
+  "ok": false,
+  "error": "DeepSeek composer not found — session may be logged out"
+}
+```
+
+**Key rules for callers:**
+1. **Always write the JSON to a temp file** and pass it with `-d @file`. Never inline the prompt in the curl command — quotes, newlines, and backticks will break the shell.
+2. **Use a long timeout** (`--max-time 180`). ChatGPT takes 30–60s, Qwen 30–90s, DeepSeek expert mode up to 5 min.
+3. **The backend must be running.** If you get connection refused, start it:
+   ```bash
+   cd ~/vibe-gpt-studio && setsid node server.js > /tmp/vibe-backend.log 2>&1 < /dev/null &
+   ```
+4. **Sanitize the prompt.** Strip PII / secrets before sending — the prompt goes to a third-party web service.
+5. **Report honestly.** If the endpoint returns `ok: false`, surface the error. Do not fabricate a response.
+
+### Example: zcode offloading UI design to ChatGPT + code to DeepSeek
+
+Here is exactly how this repo was used to build the **Desktop Chat Studio** Electron app — the backend (IPC, market-data, wiring) was handled by the harness, while the UI was offloaded to ChatGPT and the code was wired together by DeepSeek.
+
+**Step 1 — Harness writes the spec:**
+The harness wrote a precise IPC contract + data shapes, then sent it to ChatGPT as a brainstorming prompt:
+
+```bash
+cat > /tmp/_ask_chatgpt.json <<'JSON'
+{
+  "provider": "chatgpt",
+  "mode": "brainstorm",
+  "prompt": "You are building a React UI for a stocks/ETF dashboard. The backend exposes these IPC methods: getQuote(symbol), getHistory(symbol, {range, interval}), getBatchQuotes(symbols[]), searchSymbols(query), getNews(symbol?). Generate a single-file App.jsx with components: Watchlist, Chart, Heatmap, News, SectorCompare. Use yahoo-finance2 data shapes. Here is the full spec: ..."
+}
+JSON
+
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_chatgpt.json \
+  --max-time 180
+```
+
+ChatGPT returned a complete React component tree with proper data-shape mapping, component hierarchy, and CSS styling — the harness extracted it via the `multifile_extractor` and wrote it into `src/renderer/`.
+
+**Step 2 — Harness offloads code/wiring to DeepSeek:**
+The harness then sent the integration wiring task to DeepSeek (expert mode for complex reasoning):
+
+```bash
+cat > /tmp/_ask_deepseek.json <<'JSON'
+{
+  "provider": "deepseek",
+  "mode": "expert",
+  "prompt": "I have a React UI that expects getHistory to return {timestamp[], open[], high[], low[], close[], volume[]} but yahoo-finance2 v4 returns {chart: [{meta: {symbol, currency}, candles: {up: [[ts, o, h, l, c, v], ...]}}]}. Write the adapter code to transform the API response into the UI contract. Also fix the chart interval mapping: 1D→5min, 1W→15min, 1M→60min, 3M→240min, 1Y→1440min. Here is the full marketData.js code: ..."
+}
+JSON
+
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_deepseek.json \
+  --max-time 180
+```
+
+DeepSeek returned the adapter function, the interval-to-period converter, and the exact lines to insert. The harness applied the edits and verified the chart rendered correctly.
+
+**Step 3 — Harness wires it all together:**
+The harness assembled the pieces: backend IPC handlers → market-data service → React UI. The result is a fully working desktop dashboard — the harness handled the integration, ChatGPT generated the UI, DeepSeek solved the data-shape mismatch. This is the pattern the harness uses repeatedly: **design offload → code reasoning → integration wiring**.
+
+### Example: brainstorming architecture decisions across vendors
+
+```bash
+# Ask ChatGPT for approach
+cat > /tmp/_ask_chatgpt.json <<'JSON'
+{
+  "provider": "chatgpt",
+  "mode": "brainstorm",
+  "prompt": "Should I use WebSocket or HTTP polling for real-time stock quotes in an Electron app? Compare latency, battery, and complexity."
+}
+JSON
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_chatgpt.json --max-time 180
+
+# Cross-check with Qwen
+cat > /tmp/_ask_qwen.json <<'JSON'
+{
+  "provider": "qwen",
+  "mode": "brainstorm",
+  "prompt": "Should I use WebSocket or HTTP polling for real-time stock quotes in an Electron app? Compare latency, battery, and complexity."
+}
+JSON
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_qwen.json --max-time 180
+
+# DeepSeek expert for the final recommendation
+cat > /tmp/_ask_deepseek.json <<'JSON'
+{
+  "provider": "deepseek",
+  "mode": "expert",
+  "prompt": "Given: Electron desktop app, Ubuntu, 5-second poll interval, yahoo-finance2 rate limits. WebSocket or polling? Justify with trade-offs."
+}
+JSON
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_deepseek.json --max-time 180
+```
+
+### Code review / debugging
+
+```bash
+# Ask any vendor to review code
+cat > /tmp/_ask_chatgpt.json <<'JSON'
+{
+  "provider": "chatgpt",
+  "mode": "review",
+  "prompt": "Review this DeepSeek controller for race conditions and memory leaks. Here is the full deepseek_client.py: ..."
+}
+JSON
+curl -s -X POST http://localhost:3099/api/ask \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/_ask_chatgpt.json --max-time 180
+```
+
+### Programmatic usage (Python)
+
+```python
+import requests, json
+
+def ask_ai(provider, mode, prompt, timeout=180):
+    resp = requests.post(
+        "http://localhost:3099/api/ask",
+        json={"provider": provider, "mode": mode, "prompt": prompt},
+        timeout=timeout,
+    )
+    data = resp.json()
+    if data["ok"]:
+        return data["response"]
+    raise RuntimeError(data["error"])
+
+# ChatGPT brainstorm
+answer = ask_ai("chatgpt", "brainstorm", "Is Postgres or MongoDB better for multi-tenant SaaS?")
+print(answer)
+
+# DeepSeek expert review
+review = ask_ai("deepseek", "expert", "Review this Python code for thread safety: ...")
+print(review)
+```
+
+### Programmatic usage (Node.js)
+
+```javascript
+const fetch = require("node-fetch");
+
+async function askAI(provider, mode, prompt) {
+  const res = await fetch("http://localhost:3099/api/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, mode, prompt }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error);
+  return data.response;
+}
+
+// Qwen plan
+const plan = await askAI("qwen", "plan", "Design a multi-file React app structure for a stock dashboard");
+console.log(plan);
+```
+
+### How the harness should structure its workflow
+
+1. **Discover** — `GET :3099/api/status` to verify the backend is alive and check cookie counts.
+2. **Offload** — `POST :3099/api/ask` with the appropriate provider + mode for the task type.
+3. **Parse** — check `ok: true`, use the `response` field. If `ok: false`, surface the error and optionally retry once.
+4. **Iterate** — use the returned `sessionId` for follow-up turns (same session, same context).
+5. **Project mode** — for multi-file tasks, use `BUILD_PROJECT` WS message or `/api/ask` with `mode: "build_project"` to get a plan, then generate all files, then assemble.
+6. **Sanitize** — strip PII/secrets from prompts before sending. Report honestly when a vendor fails.
+
+This pattern lets any coding harness or IDE agent use **three real AI vendors** through one local endpoint — no API keys, no account sharing, just your logged-in Firefox session driving the web UIs.
+
 ## 🛠 How it works
 
 1. **Extract** — reads your Firefox profile (`cookies.sqlite`), pulls the session cookies, converts expiry from milliseconds to seconds.
